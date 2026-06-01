@@ -186,7 +186,7 @@ const Feedback = ({ params }) => {
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <h4 className="font-semibold text-gray-700 mb-2">Your Answer</h4>
-                      <p className="bg-blue-50 p-3 rounded-lg text-sm text-red-900 border border-red-200">
+                      <p className="bg-blue-50 p-3 rounded-lg text-sm text-primary border border-blue-200">
                         {item.userAns || "No answer provided"}
                       </p>
                     </div>
