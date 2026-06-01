@@ -3,11 +3,8 @@ import { Button } from "@/components/ui/button";
 import React, { useEffect, useState, useRef } from "react";
 import { Mic, StopCircle, Loader2, Camera, CameraOff } from "lucide-react";
 import { toast } from "sonner";
-import { chatSession } from "@/utils/GeminiAIModal";
-import { db } from "@/utils/db";
-import { UserAnswer } from "@/utils/schema";
-import { useUser } from "@clerk/nextjs";
 import moment from "moment";
+import { useCurrentUser } from "@/lib/auth-storage";
 
 const RecordAnswerSection = ({ 
   mockInterviewQuestion, 
@@ -16,17 +13,61 @@ const RecordAnswerSection = ({
   onAnswerSave,
 }) => {
   const [userAnswer, setUserAnswer] = useState("");
-  const { user } = useUser();
+  const { user } = useCurrentUser();
   const [loading, setLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [noSpeechRetries, setNoSpeechRetries] = useState(0);
+  const noSpeechRetriesRef = useRef(0);
+  const shouldKeepRecordingRef = useRef(false);
+  const isStartingRecognitionRef = useRef(false);
   const [webcamEnabled, setWebcamEnabled] = useState(false);
+  const [webcamStream, setWebcamStream] = useState(null);
   const recognitionRef = useRef(null);
   const webcamRef = useRef(null);
+  const MAX_NO_SPEECH_RETRIES = 2;
+
+  const startSpeechRecognition = async ({ showToast = false } = {}) => {
+    if (!recognitionRef.current || isStartingRecognitionRef.current) {
+      return;
+    }
+
+    isStartingRecognitionRef.current = true;
+
+    try {
+      const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      permissionStream.getTracks().forEach((track) => track.stop());
+      recognitionRef.current.start();
+      setIsRecording(true);
+
+      if (showToast) {
+        toast.info("Microphone started automatically");
+      }
+    } catch (startError) {
+      if (startError?.name === "InvalidStateError") {
+        setIsRecording(true);
+      } else {
+        console.error("Failed to start speech recognition:", startError);
+        toast.error("Failed to start microphone. Please allow microphone access and try again.");
+        shouldKeepRecordingRef.current = false;
+        setIsRecording(false);
+      }
+    } finally {
+      isStartingRecognitionRef.current = false;
+    }
+  };
 
   useEffect(() => {
-    // Speech recognition setup (previous code remains the same)
-    if (typeof window !== "undefined" && 'webkitSpeechRecognition' in window) {
-      recognitionRef.current = new window.webkitSpeechRecognition();
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    setSpeechSupported(Boolean(SpeechRecognition));
+
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition();
       const recognition = recognitionRef.current;
 
       recognition.continuous = true;
@@ -47,22 +88,94 @@ const RecordAnswerSection = ({
       };
 
       recognition.onerror = (event) => {
-        toast.error(`Speech recognition error: ${event.error}`);
-        setIsRecording(false);
+        // Provide clearer guidance for common speech-recognition errors
+        if (event?.error === 'no-speech') {
+          if (shouldKeepRecordingRef.current) {
+            setTimeout(() => {
+              startSpeechRecognition();
+            }, 700);
+            return;
+          }
+
+          // Retry automatically a few times before failing
+          if (noSpeechRetriesRef.current < MAX_NO_SPEECH_RETRIES) {
+            noSpeechRetriesRef.current += 1;
+            setNoSpeechRetries(noSpeechRetriesRef.current);
+            toast.info(`No speech detected. Retrying (${noSpeechRetriesRef.current}/${MAX_NO_SPEECH_RETRIES})...`);
+            try {
+              // restart after a short pause
+              setTimeout(() => {
+                recognitionRef.current?.start();
+                setIsRecording(true);
+              }, 700);
+            } catch (e) {
+              console.warn('Retry start failed', e);
+            }
+          } else {
+            toast.error('No speech detected. Make sure your microphone is unmuted and speak clearly.');
+            noSpeechRetriesRef.current = 0;
+            setNoSpeechRetries(0);
+            setIsRecording(false);
+          }
+        } else if (event?.error === 'not-allowed' || event?.error === 'permission-denied') {
+          toast.error('Microphone access denied. Please enable microphone permissions for this site.');
+          shouldKeepRecordingRef.current = false;
+          setIsRecording(false);
+        } else {
+          toast.error(`Speech recognition error: ${event.error}`);
+          setIsRecording(false);
+        }
       };
 
       recognition.onend = () => {
         setIsRecording(false);
+        if (shouldKeepRecordingRef.current) {
+          setTimeout(() => {
+            startSpeechRecognition();
+          }, 500);
+        }
       };
+
+      shouldKeepRecordingRef.current = true;
+      startSpeechRecognition({ showToast: true });
     }
+
+    return () => {
+      shouldKeepRecordingRef.current = false;
+      recognitionRef.current?.stop();
+    };
   }, []);
+
+  useEffect(() => {
+    if (!webcamRef.current || !webcamStream) {
+      return;
+    }
+
+    webcamRef.current.srcObject = webcamStream;
+    webcamRef.current.play().catch((error) => {
+      console.error("Webcam preview play error:", error);
+    });
+  }, [webcamStream]);
+
+  useEffect(() => {
+    return () => {
+      webcamStream?.getTracks().forEach((track) => track.stop());
+      recognitionRef.current?.stop();
+    };
+  }, [webcamStream]);
 
   const EnableWebcam = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (webcamRef.current) {
-        webcamRef.current.srcObject = stream;
-      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+
+      setWebcamStream(stream);
       setWebcamEnabled(true);
       toast.success("Webcam enabled successfully");
     } catch (error) {
@@ -74,30 +187,33 @@ const RecordAnswerSection = ({
   };
 
   const DisableWebcam = () => {
-    const tracks = webcamRef.current?.srcObject?.getTracks();
-    tracks?.forEach(track => track.stop());
+    webcamStream?.getTracks().forEach(track => track.stop());
+    setWebcamStream(null);
+    if (webcamRef.current) {
+      webcamRef.current.srcObject = null;
+    }
     setWebcamEnabled(false);
   };
 
-  const StartStopRecording = () => {
-    // (previous recording logic remains the same)
+  const StartStopRecording = async () => {
     if (!recognitionRef.current) {
-      toast.error("Speech-to-text not supported");
+      toast.error("Speech-to-text not supported in this browser");
       return;
     }
 
     if (isRecording) {
+      shouldKeepRecordingRef.current = false;
       recognitionRef.current.stop();
       toast.info("Recording stopped");
-    } else {
-      recognitionRef.current.start();
-      setIsRecording(true);
-      toast.info("Recording started");
+      setIsRecording(false);
+      return;
     }
+
+    shouldKeepRecordingRef.current = true;
+    startSpeechRecognition({ showToast: true });
   };
 
   const UpdateUserAnswer = async () => {
-    // (previous answer saving logic remains the same)
     if (!userAnswer.trim()) {
       toast.error("Please provide an answer");
       return;
@@ -106,34 +222,76 @@ const RecordAnswerSection = ({
     setLoading(true);
 
     try {
-      const feedbackPrompt = `Question: ${mockInterviewQuestion[activeQuestionIndex]?.question}, User Answer: ${userAnswer}. Please give a rating out of 10 and feedback on improvement in JSON format { "rating": <number>, "feedback": <text> }`;
-      
-      const result = await chatSession.sendMessage(feedbackPrompt);
-      const mockJsonResp = result.response.text().replace(/```json|```/g, '').trim();
-      const JsonfeedbackResp = JSON.parse(mockJsonResp);
+      let feedbackData = {
+        rating: 0,
+        feedback: "Feedback could not be generated.",
+        strengths: [],
+        areasForImprovement: [],
+      };
+
+      try {
+        const feedbackGenResponse = await fetch('/api/interviews/feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            question: mockInterviewQuestion[activeQuestionIndex]?.question,
+            userAnswer,
+          })
+        });
+
+        const parsedFeedback = await feedbackGenResponse.json();
+
+        if (feedbackGenResponse.ok) {
+          feedbackData = parsedFeedback;
+        } else {
+          console.warn(
+            'Feedback generation failed, saving answer without AI feedback:',
+            parsedFeedback?.message,
+            parsedFeedback?.error,
+            parsedFeedback?.rawResponse
+          );
+        }
+      } catch (feedbackError) {
+        console.warn('Feedback generation error, saving answer without AI feedback:', feedbackError);
+      }
+
+      if (!user?.email) {
+        throw new Error("Please sign in before saving an answer");
+      }
 
       const answerRecord = {
         mockIdRef: interviewData?.mockId,
         question: mockInterviewQuestion[activeQuestionIndex]?.question,
         correctAns: mockInterviewQuestion[activeQuestionIndex]?.answer,
         userAns: userAnswer,
-        feedback: JsonfeedbackResp?.feedback,
-        rating: JsonfeedbackResp?.rating,
-        userEmail: user?.primaryEmailAddress?.emailAddress,
+        feedback: feedbackData?.feedback ?? "Feedback could not be generated.",
+        strengths: feedbackData?.strengths ?? [],
+        areasForImprovement: feedbackData?.areasForImprovement ?? [],
+        rating: String(feedbackData?.rating ?? 0),
+        userEmail: user.email,
         createdAt: moment().format("DD-MM-YYYY"),
       };
 
-      await db.insert(UserAnswer).values(answerRecord);
+      const response = await fetch(`/api/interviews/${interviewData?.mockId}/answers`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(answerRecord),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to save answer");
+      }
 
       onAnswerSave?.(answerRecord);
 
       toast.success("Answer recorded successfully");
       
       setUserAnswer("");
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsRecording(false);
     } catch (error) {
       toast.error("Failed to save answer", {
         description: error.message
@@ -199,6 +357,23 @@ const RecordAnswerSection = ({
           </h2>
         )}
       </Button>
+
+      <div className="text-center mt-2 text-sm text-gray-500">
+        {!speechSupported && (
+          <div>
+            Your browser may not support speech recognition. Try Chrome or Edge.
+          </div>
+        )}
+        <div>Tip: Allow microphone, speak immediately after pressing Record.</div>
+        <a
+          className="underline text-primary"
+          href="https://webspeech.github.io/demo/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Test Microphone / Speech Demo
+        </a>
+      </div>
 
       <textarea
         className="w-full h-32 p-4 mt-4 border rounded-md text-gray-800"

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from 'react'
-import { useUser } from "@clerk/nextjs";
 import { toast } from "sonner";
 import {
   Bot,
@@ -11,12 +10,15 @@ import {
   Zap,
   TrendingUp 
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import AddNewInterview from './_components/AddNewInterview'
 import InterviewList from './_components/InterviewList'
+import { useCurrentUser } from "@/lib/auth-storage";
 
 function Dashboard() {
-  const { user } = useUser();
+  const router = useRouter();
+  const { user, isReady } = useCurrentUser();
   const [interviewData, setInterviewData] = useState([]);
   const [isNewInterviewModalOpen, setIsNewInterviewModalOpen] = useState(false);
   const [statsCards, setStatsCards] = useState([
@@ -38,7 +40,7 @@ function Dashboard() {
   ]);
 
   const fetchInterviews = async () => {
-    if (!user?.primaryEmailAddress?.emailAddress) {
+    if (!user?.email) {
       toast.error("User email not found");
       return;
     }
@@ -50,7 +52,7 @@ function Dashboard() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          userEmail: user.primaryEmailAddress.emailAddress
+          userEmail: user.email
         })
       });
   
@@ -63,7 +65,7 @@ function Dashboard() {
       
       // Filter interviews specific to the current user's email
       const userSpecificInterviews = data.userAnswers.filter(
-        interview => interview.userEmail === user.primaryEmailAddress.emailAddress
+        interview => interview.userEmail === user.email
       );
 
       setInterviewData(userSpecificInterviews);
@@ -112,10 +114,22 @@ function Dashboard() {
   };
 
   useEffect(() => {
-    if (user?.primaryEmailAddress?.emailAddress) {
+    if (isReady && !user?.email) {
+      router.replace('/sign-in');
+    }
+
+    if (user?.email) {
       fetchInterviews();
     }
-  }, [user]);
+  }, [user, isReady, router]);
+
+  if (!isReady || !user?.email) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-gray-500">Loading dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -127,12 +141,12 @@ function Dashboard() {
             Dashboard
           </h2>
           <h3 className="text-lg sm:text-xl text-gray-600 mt-2">
-            Welcome, {user?.firstName || 'Interviewer'}
+            Welcome, {user?.firstName || user?.name || 'Interviewer'}
           </h3>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-gray-500 text-sm sm:text-base">
-            {user?.primaryEmailAddress?.emailAddress || 'Not logged in'}
+            {user.email}
           </span>
         </div>
       </div>
@@ -173,7 +187,9 @@ function Dashboard() {
         <div className='grid grid-cols-1 sm:grid-cols-3 gap-6'>
           <AddNewInterview 
             isOpen={isNewInterviewModalOpen} 
+            onOpen={() => setIsNewInterviewModalOpen(true)}
             onClose={() => setIsNewInterviewModalOpen(false)} 
+            currentUser={user}
           />
         </div>
       </div>
@@ -183,7 +199,7 @@ function Dashboard() {
         <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-6">
           Interview History
         </h2>
-        <InterviewList interviews={interviewData} />
+        <InterviewList interviews={interviewData} currentUser={user} />
       </div>
     </div>
   );

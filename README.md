@@ -19,19 +19,27 @@ The Full Stack AI Mock Interview App allows users to practice technical and beha
 
 ## Features
 - **AI-Driven Questions**: Get custom-tailored interview questions based on your profile and feedback.
-- **User Authentication**: Secure login and signup using Clerk.
+- **User Authentication**: Secure login and signup using MongoDB + Mongoose.
 - **Real-Time Feedback**: Answer interview questions and receive immediate feedback with the help of Gemini AI.
 - **Interactive UI**: A responsive, user-friendly interface built with React.
-- **Data Persistence**: User data and interview history managed through Drizzle ORM.
+- **Data Persistence**: User data and interview history managed through MongoDB collections.
 
 ## Technologies Used
 - **[Next.js](https://nextjs.org/)**: Framework for server-rendered React applications.
 - **[React](https://reactjs.org/)**: JavaScript library for building user interfaces.
-- **[Drizzle ORM](https://drizzle.team/)**: ORM for managing database interactions.
+- **[Mongoose](https://mongoosejs.com/)**: ORM for MongoDB models and queries.
 - **[Gemini AI](https://gemini.ai/)**: AI API for generating interview questions and analyzing answers.
-- **[Clerk](https://clerk.dev/)**: Authentication and user management.
+- **MongoDB Compass**: Local or Atlas database browser for managing the stored interview data.
 
 ## Getting Started
+
+### Environment Variables
+Create a local `.env.local` file based on the example below before running the app:
+
+```bash
+MONGODB_URI=your_mongodb_connection_string
+NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
+```
 
 ### Installation
 To get started with the project, follow these steps:

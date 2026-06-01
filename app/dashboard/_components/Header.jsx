@@ -1,12 +1,16 @@
 "use client";
-import { SignInButton, UserButton, SignedOut, SignedIn } from "@clerk/nextjs";
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
-import { Menu, X, Bot } from "lucide-react";
+import { Menu, X, Bot, LogOut, UserCircle2 } from "lucide-react";
+import { clearCurrentUser, useCurrentUser } from "@/lib/auth-storage";
+import { toast } from "sonner";
 
 function Header() {
   const path = usePathname();
+  const router = useRouter();
+  const { user, isReady, refreshUser } = useCurrentUser();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
@@ -48,9 +52,18 @@ function Header() {
     document.body.style.overflow = 'unset';
   };
 
+  const handleSignOut = () => {
+    clearCurrentUser();
+    refreshUser();
+    closeMobileMenu();
+    router.push('/');
+    toast.success('Signed out');
+  };
+
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/dashboard", label: "Dashboard" },
+    { href: "/skill-assessment", label: "Skill Assessment" },
     { href: "/how-it-works", label: "How it works" },
     { href: "/about-us", label: "About us" },
   ];
@@ -109,35 +122,39 @@ function Header() {
 
         {/* Desktop Authentication */}
         <div className="hidden md:block">
-          <SignedOut>
-            <SignInButton mode="modal">
-              <button 
-                className="
-                  px-4 py-2 
-                  bg-indigo-600 text-white 
-                  rounded-md 
-                  hover:bg-indigo-700 
-                  transition-colors
-                  focus:outline-none 
-                  focus:ring-2 
-                  focus:ring-indigo-500 
-                  focus:ring-offset-2
-                "
+          {!isReady || !user ? (
+            <div className="flex items-center gap-3">
+              <Link 
+                href="/sign-in" 
+                className="rounded-full px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-900"
               >
                 Sign In
+              </Link>
+              <Link 
+                href="/sign-up" 
+                className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+              >
+                Sign Up
+              </Link>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-2">
+                <UserCircle2 size={18} className="text-indigo-600" />
+                <div className="text-left">
+                  <p className="text-xs font-semibold text-gray-900">{user.firstName || user.name || 'User'}</p>
+                  <p className="text-[11px] text-gray-500">{user.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-900"
+              >
+                <LogOut size={16} />
+                Sign Out
               </button>
-            </SignInButton>
-          </SignedOut>
-          <SignedIn>
-            <UserButton 
-              afterSignOutUrl="/" 
-              appearance={{
-                elements: {
-                  userButtonAvatarBox: "w-10 h-10",
-                },
-              }} 
-            />
-          </SignedIn>
+            </div>
+          )}
         </div>
       </header>
 
@@ -169,38 +186,39 @@ function Header() {
 
               {/* Mobile Authentication */}
               <div className="pt-6 border-t">
-                <SignedOut>
-                  <SignInButton mode="modal">
-                    <button 
-                      className="
-                        w-full px-4 py-2 
-                        bg-indigo-600 text-white 
-                        rounded-md 
-                        hover:bg-indigo-700 
-                        transition-colors
-                        focus:outline-none 
-                        focus:ring-2 
-                        focus:ring-indigo-500 
-                        focus:ring-offset-2
-                      "
+                {!isReady || !user ? (
+                  <div className="space-y-3">
+                    <Link
+                      href="/sign-in"
                       onClick={closeMobileMenu}
+                      className="block w-full rounded-md bg-indigo-600 px-4 py-2 text-center text-white transition-colors hover:bg-indigo-700"
                     >
                       Sign In
-                    </button>
-                  </SignInButton>
-                </SignedOut>
-                <SignedIn>
-                  <div className="flex justify-center">
-                    <UserButton 
-                      afterSignOutUrl="/" 
-                      appearance={{
-                        elements: {
-                          userButtonAvatarBox: "w-12 h-12 mx-auto",
-                        },
-                      }} 
-                    />
+                    </Link>
+                    <Link
+                      href="/sign-up"
+                      onClick={closeMobileMenu}
+                      className="block w-full rounded-md border border-gray-200 px-4 py-2 text-center text-gray-700 transition-colors hover:bg-gray-100"
+                    >
+                      Sign Up
+                    </Link>
                   </div>
-                </SignedIn>
+                ) : (
+                  <div className="space-y-3 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <UserCircle2 size={18} className="text-indigo-600" />
+                      <span className="font-semibold text-gray-900">{user.firstName || user.name || 'User'}</span>
+                    </div>
+                    <p className="text-sm text-gray-500">{user.email}</p>
+                    <button
+                      onClick={handleSignOut}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-200 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-100"
+                    >
+                      <LogOut size={16} />
+                      Sign Out
+                    </button>
+                  </div>
+                )}
               </div>
             </nav>
           </div>

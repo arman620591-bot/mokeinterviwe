@@ -2,7 +2,9 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     },
     "lib": [
       "dom",
@@ -24,14 +26,16 @@
       {
         "name": "next"
       }
-    ]
+    ],
+    "strictNullChecks": true
   },
   "include": [
     "next-env.d.ts",
     ".next/types/**/*.ts",
     "**/*.ts",
-    "**/*.tsx"
-, "app/dashboard/interview/[interviewId]/feedback/page.jsx"  ],
+    "**/*.tsx",
+    "app/dashboard/interview/[interviewId]/feedback/page.jsx"
+  ],
   "exclude": [
     "node_modules"
   ]

@@ -1,12 +1,9 @@
 import React from 'react';
-import Header from './_components/Header';
-import Footer from './_components/Footer';
 
 function DashboardLayout({ children }) {
   return (
-    <div>
-   <Header />
-      <main className="container mx-auto my-8 px-4">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 pt-8 sm:pt-12">
+      <main className="container mx-auto px-4 pb-12">
         {children}
       
       </main>

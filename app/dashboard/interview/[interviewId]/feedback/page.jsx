@@ -1,7 +1,4 @@
 "use client";
-import { db } from '@/utils/db';
-import { UserAnswer } from '@/utils/schema';
-import { eq } from 'drizzle-orm';
 import React, { useEffect, useState } from 'react';
 import {
   Collapsible,
@@ -29,20 +26,42 @@ const Feedback = ({ params }) => {
     GetFeedback();
   }, []);
 
+  const estimateRating = (item) => {
+    const words = String(item?.userAns || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    const answerLengthScore = Math.min(5, Math.floor(words.length / 12));
+    const hasCorrectAnswer = Boolean(item?.correctAns);
+    return Math.max(1, Math.min(10, 3 + answerLengthScore + (hasCorrectAnswer ? 1 : 0)));
+  };
+
+  const getDisplayRatingValue = (item) => {
+    const numericRating = Number(item?.rating);
+
+    if (Number.isFinite(numericRating) && numericRating > 0) {
+      return numericRating;
+    }
+
+    if (item?.userAns) {
+      return estimateRating(item);
+    }
+
+    return null;
+  };
+
   const GetFeedback = async () => {
     setLoading(true);
-    const result = await db.select()
-      .from(UserAnswer)
-      .where(eq(UserAnswer.mockIdRef, params.interviewId))
-      .orderBy(UserAnswer.id);
+    const response = await fetch(`/api/interviews/${params.interviewId}/answers`);
+    const data = await response.json();
 
-    setFeedbackList(result);
+    setFeedbackList(data.answers || []);
     setLoading(false);
 
     // Calculate the average rating dynamically, only including valid ratings
-    const validRatings = result
-      .map((item) => parseFloat(item.rating))
-      .filter((rating) => !isNaN(rating));
+    const validRatings = (data.answers || [])
+      .map((item) => getDisplayRatingValue(item))
+      .filter((rating) => rating !== null);
 
     const totalRating = validRatings.reduce((sum, rating) => sum + rating, 0);
     const avgRating = validRatings.length > 0 
@@ -53,10 +72,15 @@ const Feedback = ({ params }) => {
   };
 
   const getRatingColor = (rating) => {
-    const numRating = parseFloat(rating);
+    const numRating = Number(rating);
     if (numRating >= 8) return "text-green-600";
     if (numRating >= 5) return "text-yellow-600";
     return "text-red-600";
+  };
+
+  const formatRating = (rating) => {
+    const numRating = Number(rating);
+    return Number.isFinite(numRating) ? `${numRating}/10` : "N/A";
   };
 
   if (loading) {
@@ -135,22 +159,27 @@ const Feedback = ({ params }) => {
             {feedbackList.map((item, index) => (
               <Collapsible key={index} className="border rounded-lg overflow-hidden">
                 <CollapsibleTrigger className="w-full">
-                  <div className="flex items-center justify-between p-4 bg-gray-100 hover:bg-gray-200 transition-colors">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-between gap-4 p-4 bg-gray-100 hover:bg-gray-200 transition-colors">
+                    <div className="flex min-w-0 items-center gap-3">
                       <Target 
                         className={`h-5 w-5 ${
-                          parseFloat(item.rating) >= 7 
+                          getDisplayRatingValue(item) >= 7 
                             ? "text-green-500" 
-                            : parseFloat(item.rating) >= 4 
+                            : getDisplayRatingValue(item) >= 4 
                             ? "text-yellow-500" 
                             : "text-red-500"
                         }`} 
                       />
-                      <span className="font-medium text-gray-800 line-clamp-1">
+                      <span className="font-medium text-gray-800 truncate">
                         {item.question}
                       </span>
                     </div>
-                    <ChevronsUpDown className="h-4 text-gray-500" />
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className={`rounded-md bg-white px-3 py-1 text-sm font-bold shadow-sm ${getRatingColor(getDisplayRatingValue(item))}`}>
+                        {formatRating(getDisplayRatingValue(item))}
+                      </span>
+                      <ChevronsUpDown className="h-4 text-gray-500" />
+                    </div>
                   </div>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="p-4 bg-white">
@@ -174,9 +203,33 @@ const Feedback = ({ params }) => {
                       {item.feedback}
                     </p>
                   </div>
-                  <div className="mt-4 text-right">
-                    <span className={`font-bold ${getRatingColor(item.rating)}`}>
-                      Rating: {item.rating}/10
+                  {(item.strengths?.length > 0 || item.areasForImprovement?.length > 0) && (
+                    <div className="grid md:grid-cols-2 gap-4 mt-4">
+                      {item.strengths?.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold text-gray-700 mb-2">Strengths</h4>
+                          <ul className="bg-green-50 p-3 rounded-lg text-sm text-green-900 border border-green-200 list-disc list-inside">
+                            {item.strengths.map((strength, strengthIndex) => (
+                              <li key={strengthIndex}>{strength}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {item.areasForImprovement?.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold text-gray-700 mb-2">Areas for Improvement</h4>
+                          <ul className="bg-yellow-50 p-3 rounded-lg text-sm text-yellow-900 border border-yellow-200 list-disc list-inside">
+                            {item.areasForImprovement.map((area, areaIndex) => (
+                              <li key={areaIndex}>{area}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="mt-4 flex justify-end">
+                    <span className={`rounded-md bg-gray-50 px-3 py-2 text-sm font-bold ${getRatingColor(getDisplayRatingValue(item))}`}>
+                      Rating: {formatRating(getDisplayRatingValue(item))}
                     </span>
                   </div>
                 </CollapsibleContent>

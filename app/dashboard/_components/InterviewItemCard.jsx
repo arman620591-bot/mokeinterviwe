@@ -1,13 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
-import { db } from "@/utils/db";
-import { eq } from "drizzle-orm";
-import { MockInterview } from "@/utils/schema";
 import { Trash } from "lucide-react";
 import { toast } from "sonner";
 
-const InterviewItemCard = ({ interview }) => {
+const InterviewItemCard = ({ interview, currentUser }) => {
   const router = useRouter();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -21,7 +18,17 @@ const InterviewItemCard = ({ interview }) => {
 
   const onDelete = async () => {
     try {
-      await db.delete(MockInterview).where(eq(MockInterview.mockId, interview?.mockId));
+      const response = await fetch(
+        `/api/interviews/${interview?.mockId}?email=${encodeURIComponent(currentUser?.email || "")}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to delete interview");
+      }
       
       // Close dialog and show success toast
       setIsDialogOpen(false);

@@ -8,7 +8,7 @@ const HowItWorksPage = () => {
     {
       icon: <UserCheck size={48} className="text-indigo-600" />,
       title: "Sign Up or Log In",
-      description: "Create an account or log in using Clerk. Build a personalized profile that tracks your interview journey and stores preferences."
+      description: "Create a local account backed by MongoDB. Your interview history stays tied to your email and can be managed in MongoDB Compass."
     },
     {
       icon: <Settings size={48} className="text-indigo-600" />,

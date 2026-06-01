@@ -1,33 +1,46 @@
 "use client";
 import { Button } from "@/components/ui/button";
-import { db } from "@/utils/db";
-import { MockInterview } from "@/utils/schema";
-import { eq } from "drizzle-orm";
 import { Lightbulb, WebcamIcon } from "lucide-react";
 import Link from "next/link";
-import React, { useEffect, useState } from "react";
-import Webcam from "react-webcam";
+import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 function Interview({ params }) {
   const [interviewData, setInterviewData] = useState(null);
   const [webCamEnabled, setWebCamEnabled] = useState(false);
+  const [webcamStream, setWebcamStream] = useState(null);
+  const webcamRef = useRef(null);
 
   useEffect(() => {
     GetInterviewDetails();
   }, []);
 
+  useEffect(() => {
+    if (!webcamRef.current || !webcamStream) {
+      return;
+    }
+
+    webcamRef.current.srcObject = webcamStream;
+    webcamRef.current.play().catch((error) => {
+      console.error("Webcam preview play error:", error);
+    });
+  }, [webcamStream]);
+
+  useEffect(() => {
+    return () => {
+      webcamStream?.getTracks().forEach((track) => track.stop());
+    };
+  }, [webcamStream]);
+
   const GetInterviewDetails = async () => {
     try {
-      const result = await db
-        .select()
-        .from(MockInterview)
-        .where(eq(MockInterview.mockId, params.interviewId));
+      const response = await fetch(`/api/interviews/${params.interviewId}`);
+      const data = await response.json();
 
-      if (result.length > 0) {
-        setInterviewData(result[0]);
+      if (response.ok) {
+        setInterviewData(data.interview);
       } else {
-        toast.error("Interview details not found");
+        toast.error(data.message || "Interview details not found");
       }
     } catch (error) {
       toast.error("Error fetching interview details");
@@ -35,18 +48,28 @@ function Interview({ params }) {
     }
   };
 
-  const handleWebcamToggle = () => {
+  const handleWebcamToggle = async () => {
     if (!webCamEnabled) {
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then(() => {
-          setWebCamEnabled(true);
-          toast.success("Webcam and microphone enabled");
-        })
-        .catch((error) => {
-          toast.error("Failed to access webcam or microphone");
-          console.error("Webcam access error:", error);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: true,
         });
+
+        setWebcamStream(stream);
+        setWebCamEnabled(true);
+        toast.success("Webcam and microphone enabled");
+      } catch (error) {
+        toast.error("Failed to access webcam or microphone");
+        console.error("Webcam access error:", error);
+      }
     } else {
+      webcamStream?.getTracks().forEach((track) => track.stop());
+      setWebcamStream(null);
       setWebCamEnabled(false);
     }
   };
@@ -88,14 +111,12 @@ function Interview({ params }) {
         </div>
         <div>
           {webCamEnabled ? (
-            <Webcam
-              mirrored={true}
-              style={{ height: 300, width: "auto" }}
-              onUserMedia={() => setWebCamEnabled(true)}
-              onUserMediaError={() => {
-                toast.error("Webcam access error");
-                setWebCamEnabled(false);
-              }}
+            <video
+              ref={webcamRef}
+              autoPlay
+              muted
+              playsInline
+              className="my-7 h-72 w-full rounded-lg bg-black object-cover"
             />
           ) : (
             <>

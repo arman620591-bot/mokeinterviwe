@@ -9,10 +9,15 @@ import {
   Globe, 
   Award, 
   Brain,
-  ArrowRight
+  ArrowRight,
+  Bot,
+  Loader2,
+  MessageCircle,
+  X
 } from 'lucide-react'
 import Link from 'next/link'
 import HeroSection from './dashboard/_components/HeroSection'
+import { toast } from 'sonner'
 
 const ResourceCard = ({ icon, title, description, links }) => (
   <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 p-6 flex flex-col h-full">
@@ -42,6 +47,15 @@ const ResourceCard = ({ icon, title, description, links }) => (
 
 export default function ResourcesPage() {
   const [activeCategory, setActiveCategory] = useState('tech')
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [chatMessages, setChatMessages] = useState([
+    {
+      role: 'assistant',
+      content: 'Hi, I can help with interview prep, coding topics, resumes, and study plans.',
+    },
+  ])
 
   const resourceCategories = {
     tech: {
@@ -122,6 +136,45 @@ export default function ResourcesPage() {
     }
   }
 
+  const handleChatSubmit = async (event) => {
+    event.preventDefault()
+
+    const message = chatInput.trim()
+    if (!message || chatLoading) {
+      return
+    }
+
+    setChatMessages((prev) => [...prev, { role: 'user', content: message }])
+    setChatInput('')
+    setChatLoading(true)
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data?.message || 'Chatbot failed')
+      }
+
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: data.reply || 'Please ask again with a little more detail.' },
+      ])
+    } catch (error) {
+      toast.error(error.message || 'Unable to reach AI chatbot')
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'I am having trouble replying right now. Please try again in a moment.' },
+      ])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
   return (
     <>
     <HeroSection />
@@ -188,7 +241,7 @@ export default function ResourcesPage() {
                 title: "Skill Assessment",
                 description: "Identify and improve your key skills",
                 icon: <Brain className="w-12 h-12 text-purple-600 mx-auto mb-4" />,
-                url: "https://www.skillvalue.com/"
+                url: "/skill-assessment"
               }
             ].map((tip, index) => (
               <div 
@@ -202,8 +255,6 @@ export default function ResourcesPage() {
                 <p className="text-gray-600 mb-4">{tip.description}</p>
                 <a
                   href={tip.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="group-hover:text-indigo-800 text-indigo-600 flex items-center justify-center"
                 >
                   Explore
@@ -214,6 +265,83 @@ export default function ResourcesPage() {
           </div>
         </div>
       </div>
+    </div>
+    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
+      {chatOpen && (
+        <div className="w-[calc(100vw-2.5rem)] max-w-sm overflow-hidden rounded-lg border border-gray-200 bg-white shadow-2xl">
+          <div className="flex items-center justify-between border-b border-gray-100 bg-gray-900 px-4 py-3 text-white">
+            <div className="flex items-center gap-2">
+              <Bot className="h-5 w-5" />
+              <div>
+                <h2 className="text-sm font-semibold">AI Chatbot</h2>
+                <p className="text-xs text-gray-300">Gemini powered interview help</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setChatOpen(false)}
+              className="rounded-md p-1 text-gray-300 transition hover:bg-white/10 hover:text-white"
+              aria-label="Close AI chatbot"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="max-h-80 space-y-3 overflow-y-auto bg-gray-50 p-3">
+            {chatMessages.map((item, index) => (
+              <div
+                key={`${item.role}-${index}`}
+                className={`flex ${item.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[88%] rounded-md px-3 py-2 text-sm leading-5 ${
+                    item.role === 'user'
+                      ? 'bg-indigo-600 text-white'
+                      : 'border border-gray-200 bg-white text-gray-700'
+                  }`}
+                >
+                  {item.content}
+                </div>
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex justify-start">
+                <div className="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Thinking
+                </div>
+              </div>
+            )}
+          </div>
+
+          <form onSubmit={handleChatSubmit} className="space-y-3 border-t border-gray-100 p-3">
+            <textarea
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              placeholder="Ask about interview prep..."
+              rows={3}
+              className="w-full resize-none rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            />
+            <button
+              type="submit"
+              disabled={chatLoading || !chatInput.trim()}
+              className="inline-flex w-full items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <MessageCircle className="mr-2 h-4 w-4" />
+              Send Message
+            </button>
+          </form>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setChatOpen((open) => !open)}
+        className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200"
+        aria-label={chatOpen ? 'Close AI chatbot' : 'Open AI chatbot'}
+      >
+        {chatOpen ? <X className="h-6 w-6" /> : <Bot className="h-6 w-6" />}
+      </button>
     </div>
     </>
   )

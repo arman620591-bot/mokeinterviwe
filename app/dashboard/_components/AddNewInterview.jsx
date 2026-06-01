@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,12 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { chatSession } from "@/utils/GeminiAIModal";
 import { LoaderCircle, Sparkles } from "lucide-react";
-import { MockInterview } from "@/utils/schema";
 import { v4 as uuidv4 } from 'uuid';
-import { db } from "@/utils/db";
-import { useUser } from "@clerk/nextjs";
 import moment from "moment";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -48,14 +44,29 @@ const TECH_STACK_SUGGESTIONS = {
   'UI/UX Designer': 'Figma, Sketch, Adobe XD, InVision'
 };
 
-function AddNewInterview() {
+function AddNewInterview({ currentUser, isOpen = false, onOpen, onClose }) {
   const [openDialog, setOpenDialog] = useState(false);
   const [jobPosition, setJobPosition] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [jobExperience, setJobExperience] = useState("");
   const [loading, setLoading] = useState(false);
-  const { user } = useUser();
   const router = useRouter();
+  const isControlled = typeof onClose === "function";
+  const dialogOpen = isControlled ? isOpen : openDialog;
+
+  const setDialogState = (nextOpen) => {
+    if (isControlled) {
+      if (nextOpen) {
+        onOpen?.();
+      }
+      if (!nextOpen) {
+        onClose();
+      }
+      return;
+    }
+
+    setOpenDialog(nextOpen);
+  };
 
   // Auto-suggest tech stack based on job role
   const autoSuggestTechStack = (role) => {
@@ -68,35 +79,66 @@ function AddNewInterview() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+
+    if (!currentUser?.email) {
+      toast.error("Please sign in before creating an interview");
+      return;
+    }
+
     setLoading(true);
   
-    const inputPrompt = `Job position: ${jobPosition}, Job Description: ${jobDescription}, Years of Experience: ${jobExperience}.
-    Generate 5 interview questions and answers in JSON format.`;
-  
+
     try {
-      const result = await chatSession.sendMessage(inputPrompt);
-      const responseText = await result.response.text();
-      
-      const cleanedResponse = responseText.replace(/```json\n?|```/g, '').trim();
-      
-      const mockResponse = JSON.parse(cleanedResponse);
-      
-      const res = await db.insert(MockInterview)
-        .values({
-          mockId: uuidv4(),
-          jsonMockResp: JSON.stringify(mockResponse),
-          jobPosition: jobPosition,
+      const generatedResponse = await fetch('/api/interviews/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          jobPosition,
           jobDesc: jobDescription,
-          jobExperience: jobExperience,
-          createdBy: user?.primaryEmailAddress?.emailAddress,
+          jobExperience,
+        })
+      });
+
+      const generatedData = await generatedResponse.json();
+
+      if (!generatedResponse.ok) {
+        throw new Error(generatedData.message || 'Failed to generate interview questions');
+      }
+
+      const mockResponse = generatedData.questions;
+      
+      const res = await fetch('/api/interviews', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          mockId: uuidv4(),
+          jsonMockResp: mockResponse,
+          jobPosition,
+          jobDesc: jobDescription,
+          jobExperience,
+          createdBy: currentUser.email,
           createdAt: moment().format('DD-MM-YYYY'),
-        }).returning({ mockId: MockInterview.mockId });
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to create interview');
+      }
       
       toast.success('Interview questions generated successfully!');
-      router.push(`dashboard/interview/${res[0]?.mockId}`);
+      setDialogState(false);
+      router.push(`/dashboard/interview/${data?.interview?.mockId || data?.mockId || ''}`);
     } catch (error) {
       console.error("Error generating interview:", error);
-      toast.error('Failed to generate interview questions.');
+      toast.error('Failed to generate interview questions.', {
+        description: error.message,
+      });
     } finally {
       setLoading(false);
     }
@@ -106,11 +148,11 @@ function AddNewInterview() {
     <div>
       <div
         className="p-10 border rounded-lg bg-secondary hover:scale-105 hover:shadow-md cursor-pointer transition-all"
-        onClick={() => setOpenDialog(true)}
+        onClick={() => setDialogState(true)}
       >
         <h1 className="font-bold text-lg text-center">+ Add New</h1>
       </div>
-      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+      <Dialog open={dialogOpen} onOpenChange={setDialogState}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-bold text-2xl">
@@ -169,7 +211,7 @@ function AddNewInterview() {
                 </div>
               </div>
               <div className="flex gap-5 justify-end">
-                <Button type="button" variant="ghost" onClick={() => setOpenDialog(false)}>
+                <Button type="button" variant="ghost" onClick={() => setDialogState(false)}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={loading}>

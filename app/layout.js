@@ -1,10 +1,8 @@
 import localFont from "next/font/local";
 import "./globals.css";
-import { ClerkProvider } from '@clerk/nextjs';
 import { Toaster } from "@/components/ui/sonner";
 import Footer from "./dashboard/_components/Footer";
 import Header from "./dashboard/_components/Header";
-import { OpenGraph } from 'next/dist/lib/metadata/types/opengraph-types';
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -85,63 +83,61 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <ClerkProvider>
-      <html 
-        lang="en" 
-        className={`${geistSans.variable} ${geistMono.variable}`}
+    <html 
+      lang="en" 
+      className={`${geistSans.variable} ${geistMono.variable}`}
+    >
+      <body 
+        className={`
+          antialiased 
+          min-h-screen 
+          flex 
+          flex-col 
+          bg-white 
+          text-gray-900 
+          font-sans
+        `}
       >
-        <body 
-          className={`
-            antialiased 
-            min-h-screen 
-            flex 
-            flex-col 
-            bg-white 
-            text-gray-900 
-            font-sans
-          `}
+        <a 
+          href="#main-content" 
+          className="
+            absolute 
+            top-[-999px] 
+            left-[-999px] 
+            z-[-1] 
+            focus:top-0 
+            focus:left-0 
+            focus:z-50 
+            p-4 
+            bg-indigo-600 
+            text-white
+          "
         >
-          <a 
-            href="#main-content" 
-            className="
-              absolute 
-              top-[-999px] 
-              left-[-999px] 
-              z-[-1] 
-              focus:top-0 
-              focus:left-0 
-              focus:z-50 
-              p-4 
-              bg-indigo-600 
-              text-white
-            "
-          >
-            Skip to main content
-          </a>
-          
-          <Header />
-          <Toaster />
-          
-          <main 
-            id="main-content" 
-            className="
-              flex-grow 
-              pt-16 
-              sm:pt-20 
-              max-w-7xl 
-              mx-auto 
-              w-full 
-              px-4 
-              sm:px-6 
-              lg:px-8
-            "
-          >
-            {children}
-          </main>
-          
-          <Footer />
-        </body>
-      </html>
-    </ClerkProvider>
+          Skip to main content
+        </a>
+        
+        <Header />
+        <Toaster />
+        
+        <main 
+          id="main-content" 
+          className="
+            flex-grow 
+            pt-16 
+            sm:pt-20 
+            max-w-7xl 
+            mx-auto 
+            w-full 
+            px-4 
+            sm:px-6 
+            lg:px-8
+          "
+        >
+          {children}
+        </main>
+        
+        <Footer />
+      </body>
+    </html>
   );
 }

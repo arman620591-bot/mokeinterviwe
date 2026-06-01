@@ -1,16 +1,21 @@
 import { NextResponse } from 'next/server';
-import { db } from '../../../utils/db'; 
-import { eq } from 'drizzle-orm'; 
-import { UserAnswer } from '../../../utils/schema';  
+import { connectToDatabase } from '@/lib/mongoose';
+import UserAnswer from '@/models/UserAnswer';
 
 export async function POST(request) {
     try {
         const { userEmail } = await request.json();
 
-        const userAnswers = await db
-            .select()
-            .from(UserAnswer)
-            .where(eq(UserAnswer.userEmail, userEmail));
+        if (!userEmail) {
+            return NextResponse.json({ message: 'User email is required' }, { status: 400 });
+        }
+
+        await connectToDatabase();
+
+        const userAnswers = await UserAnswer.find({ userEmail }).sort({
+            createdAt: -1,
+            _id: -1,
+        });
 
         return NextResponse.json({ 
             userAnswers: userAnswers.length > 0 ? userAnswers : [] 
