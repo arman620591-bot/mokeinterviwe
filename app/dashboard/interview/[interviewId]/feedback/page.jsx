@@ -191,7 +191,7 @@ const Feedback = ({ params }) => {
                       </p>
                     </div>
                     <div>
-                      <h4 className="font-semibold text-gray-700 mb-2">Correct Answer</h4>
+                      <h4 className="font-semibold text-gray-700 mb-2">Accurate Answer</h4>
                       <p className="bg-green-50 p-3 rounded-lg text-sm text-green-900 border border-green-200">
                         {item.correctAns}
                       </p>
